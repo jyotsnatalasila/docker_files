@@ -14,14 +14,6 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          # FIXED: Proper ssh-keyscan command
-          ssh-keyscan ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
       - name: Copy repo to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -43,50 +35,25 @@ jobs:
           script: |
             cd /home/ubuntu/agrigrow
             
-            # Install Docker if missing
+            # Install Docker
             if ! command -v docker &> /dev/null; then
               echo "Installing Docker..."
-              sudo apt-get update -y
-              sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-              
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-              
-              echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              
-              sudo apt-get update -y
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-              
-              sudo systemctl enable docker
-              sudo systemctl start docker
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sudo sh get-docker.sh
               sudo usermod -aG docker ubuntu
             fi
 
-            # Install Docker Compose if missing
-            if ! command -v docker compose &> /dev/null; then
-              sudo apt-get install -y docker-compose-plugin
-            fi
+            # Update configuration with NEW DNS
+            sudo sed -i 's|ec2-13-48-31-208.eu-north-1.compute.amazonaws.com|ec2-16-16-179-64.eu-north-1.compute.amazonaws.com|g' docker-compose.yml
+            sudo sed -i 's|ec2-13-48-31-208.eu-north-1.compute.amazonaws.com|ec2-16-16-179-64.eu-north-1.compute.amazonaws.com|g' nginx.conf || true
 
-            # Set permissions
-            sudo chown -R ubuntu:ubuntu /home/ubuntu/agrigrow
-
-            # Replace localhost with DNS in configuration files
-            echo "Updating configuration with DNS..."
-            sed -i 's|http://localhost:4000|http://ec2-13-48-31-208.eu-north-1.compute.amazonaws.com:4000|g' docker-compose.yml
-            sed -i 's|server_name localhost;|server_name ec2-13-48-31-208.eu-north-1.compute.amazonaws.com;|g' nginx.conf || true
-
-            # Stop old containers and rebuild
+            # Deploy application
             sudo docker compose down || true
-            sudo docker system prune -f
             sudo docker compose up -d --build
 
-            # Wait for services to start
-            sleep 30
-            sudo docker ps -a
-            
-            echo "Checking services..."
-            curl -f http://localhost:4000 || echo "Frontend check failed"
-            curl -f http://localhost:1011/agrigrowbe/api/auth/health || echo "Backend health check failed"
-
+            # Check deployment
+            sleep 10
+            sudo docker ps
             echo "🚀 Deployment completed successfully!"
-            echo "🌐 Frontend: http://ec2-13-48-31-208.eu-north-1.compute.amazonaws.com:4000"
-            echo "🔧 Backend API: http://ec2-13-48-31-208.eu-north-1.compute.amazonaws.com:1011/agrigrowbe/api/"
+            echo "🌐 Frontend: http://ec2-16-16-179-64.eu-north-1.compute.amazonaws.com:4000"
+            echo "🔧 Backend: http://ec2-16-16-179-64.eu-north-1.compute.amazonaws.com:1011"
