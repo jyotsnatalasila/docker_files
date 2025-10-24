@@ -1,0 +1,19 @@
+FROM maven:3.9.4-eclipse-temurin-17 AS build
+WORKDIR /workspace
+
+# Clone the backend project directly from GitHub
+RUN apt-get update && apt-get install -y git && \
+    git clone https://github.com/jyotsnatalasila/agrigrowbe-docker.git . && \
+    rm -rf /var/lib/apt/lists/*
+
+# Build the project
+RUN mvn -DskipTests package
+
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+
+COPY --from=build /workspace/target/agrigrowbe.war /app/app.jar
+
+EXPOSE 1010
+ENV JAVA_OPTS="-Xms256m -Xmx512m"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
