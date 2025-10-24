@@ -14,6 +14,13 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
       - name: Copy repo to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -61,10 +68,10 @@ jobs:
             # Set permissions
             sudo chown -R ubuntu:ubuntu /home/ubuntu/agrigrow
 
-            # Replace localhost with DNS in docker-compose.yml
+            # Replace localhost with DNS in configuration files
             echo "Updating configuration with DNS..."
             sed -i 's|http://localhost:4000|http://ec2-13-48-31-208.eu-north-1.compute.amazonaws.com:4000|g' docker-compose.yml
-            sed -i 's|localhost|ec2-13-48-31-208.eu-north-1.compute.amazonaws.com|g' nginx.conf || true
+            sed -i 's|server_name localhost;|server_name ec2-13-48-31-208.eu-north-1.compute.amazonaws.com;|g' nginx.conf || true
 
             # Stop old containers and rebuild
             sudo docker compose down || true
@@ -82,4 +89,3 @@ jobs:
             echo "🚀 Deployment completed successfully!"
             echo "🌐 Frontend: http://ec2-13-48-31-208.eu-north-1.compute.amazonaws.com:4000"
             echo "🔧 Backend API: http://ec2-13-48-31-208.eu-north-1.compute.amazonaws.com:1011/agrigrowbe/api/"
-            echo "🗄️  Database: http://ec2-13-48-31-208.eu-north-1.compute.amazonaws.com:33062"
